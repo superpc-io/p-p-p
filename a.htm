@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>漢字手書きテスト</title>
+  <style>
+    :root {
+      --primary: #4a90e2;
+      --primary-hover: #357abd;
+      --success: #2ecc71;
+      --danger: #e74c3c;
+      --warning: #f39c12;
+      --bg-color: #f0f4f8;
+      --card-bg: #ffffff;
+      --text-main: #2c3e50;
+      --text-sub: #7f8c8d;
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      text-align: center;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      margin: 0;
+      padding: 15px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: 16px;
+      padding: 20px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+      position: relative;
+    }
+
+    .header-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 14px;
+      color: var(--text-sub);
+      margin-bottom: 10px;
+      font-weight: 600;
+    }
+
+    .progress-bar-bg {
+      width: 100%;
+      height: 6px;
+      background: #e2e8f0;
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--primary);
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    .instruction {
+      margin: 4px 0 10px;
+      font-size: 13px;
+      color: var(--text-sub);
+    }
+
+    .reading-box {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 12px;
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f8fafc;
+      border-radius: 8px;
+      border: 1px dashed #cbd5e1;
+      padding: 6px 12px;
+    }
+
+    .canvas-container {
+      position: relative;
+      width: 280px;
+      height: 280px;
+      margin: 0 auto;
+    }
+
+    /* 漢字練習帳のような十字グリッド線 */
+    .canvas-grid {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 280px;
+      height: 280px;
+      pointer-events: none;
+      border-radius: 12px;
+      border: 3px solid var(--primary);
+    }
+
+    .canvas-grid::before, .canvas-grid::after {
+      content: '';
+      position: absolute;
+      background: #e2e8f0;
+    }
+
+    /* 縦線 */
+    .canvas-grid::before {
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 1px;
+      border-left: 1px dashed #cbd5e1;
+    }
+
+    /* 横線 */
+    .canvas-grid::after {
+      left: 0;
+      right: 0;
+      top: 50%;
+      height: 1px;
+      border-top: 1px dashed #cbd5e1;
+    }
+
+    canvas {
+      border-radius: 12px;
+      background-color: #fff;
+      touch-action: none;
+      cursor: crosshair;
+      display: block;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+    }
+
+    .btn-group {
+      margin-top: 16px;
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      font-size: 15px;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+
+    button:active {
+      transform: scale(0.97);
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .btn-undo { background: #ffe0b2; color: #e65100; }
+    .btn-undo:hover { background: #ffcc80; }
+    
+    .btn-clear { background: #f1f5f9; color: #475569; }
+    .btn-clear:hover { background: #e2e8f0; }
+    
+    .btn-check { background: var(--primary); color: white; flex: 1; max-width: 140px; }
+    .btn-check:hover { background: var(--primary-hover); }
+    
+    .btn-next { background: var(--success); color: white; display: none; width: 100%; }
+    .btn-next:hover { background: #27ae60; }
+
+    .result-container {
+      margin-top: 10px;
+      min-height: 70px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .result {
+      font-size: 32px;
+      font-weight: 900;
+      line-height: 1.2;
+    }
+    
+    .correct { color: var(--danger); }
+    .incorrect { color: var(--primary); }
+
+    .answer-text {
+      font-size: 16px;
+      color: #334155;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+
+    .candidates-list {
+      font-size: 12px;
+      color: #64748b;
+      margin-top: 4px;
+      word-break: break-all;
+    }
+
+    .manual-grade-box {
+      display: none;
+      margin-top: 10px;
+      padding: 10px;
+      background: #fffbe3;
+      border: 1px solid #ffe58f;
+      border-radius: 8px;
+      font-size: 12px;
+      color: #856404;
+    }
+
+    .manual-btn-group {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      margin-top: 6px;
+    }
+
+    .btn-pass { background: #2ecc71; color: white; padding: 6px 12px; font-size: 13px; }
+    .btn-fail { background: #e74c3c; color: white; padding: 6px 12px; font-size: 13px; }
+
+    .toast {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.85);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+      z-index: 10;
+    }
+
+    .toast.show {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <div class="toast" id="toast"></div>
+
+  <div class="header-info">
+    <span id="progress">問題 1 / 95</span>
+    <span id="score">正解: 0</span>
+  </div>
+
+  <div class="progress-bar-bg">
+    <div class="progress-bar-fill" id="progressBar"></div>
+  </div>
+
+  <p class="instruction">読みを参考に漢字を枠内に書いてね</p>
+  <div class="reading-box" id="reading">---</div>
+  
+  <div class="canvas-container">
+    <div class="canvas-grid"></div>
+    <canvas id="canvas" width="280" height="280"></canvas>
+  </div>
+  
+  <div class="result-container">
+    <div class="result" id="result"></div>
+    <div class="answer-text" id="answer"></div>
+    <div class="candidates-list" id="candidates"></div>
+  </div>
+
+  <!-- CORS制限時や判定失敗用の自己採点UI -->
+  <div class="manual-grade-box" id="manualGradeBox">
+    <div>⚠️ 認識APIに接続できないか、判定結果が微妙な場合は自己判定できます：</div>
+    <div class="manual-btn-group">
+      <button class="btn-pass" onclick="applyManualGrade(true)">◯ 正解にする</button>
+      <button class="btn-fail" onclick="applyManualGrade(false)">✕ 不正解にする</button>
+    </div>
+  </div>
+
+  <div class="btn-group">
+    <button class="btn-undo" onclick="undoCanvas()">1画消す</button>
+    <button class="btn-clear" onclick="clearCanvas()">全消し</button>
+    <button class="btn-check" id="checkBtn" onclick="checkAnswer()">判定</button>
+    <button class="btn-next" id="nextBtn" onclick="nextQuestion()">次の問題へ ➔</button>
+  </div>
+</div>
+
+<script>
+const originalQuizData = [
+  { reading: "フウ/ホウ (ふういん)", kanji: "封印" },
+  { reading: "あてる (あてな)", kanji: "宛名" },
+  { reading: "チョウ/はる (はる)", kanji: "貼る" },
+  { reading: "ゴ/たがい (たがいに)", kanji: "互いに" },
+  { reading: "トウ/たたかう (けんとう)", kanji: "健闘" },
+  { reading: "ジュウ/ニュウ/やわらかい (じゅうどう)", kanji: "柔道" },
+  { reading: "セイ (えんせい)", kanji: "遠征" },
+  { reading: "ボク (しんぼく)", kanji: "親睦" },
+  { reading: "コウ/かたい (こうすい)", kanji: "硬水" },
+  { reading: "なぞ (なぞ)", kanji: "謎" },
+  { reading: "ユ (ひゆ)", kanji: "比喩" },
+  { reading: "ジョ (じょじゅつ)", kanji: "叙述" },
+  { reading: "キョ/コ (こんきょ)", kanji: "根拠" },
+  { reading: "ボウ/とぼしい (とぼしい)", kanji: "乏しい" },
+  { reading: "ゴウ (ごうう)", kanji: "豪雨" },
+  { reading: "カン (かんき)", kanji: "喚起" },
+  { reading: "キョ/コ (くうきょ)", kanji: "空虚" },
+  { reading: "ギ/いつわる (きょぎ)", kanji: "虚偽" },
+  { reading: "サイ/もよおす (しゅさい)", kanji: "主催" },
+  { reading: "ソク/うながす (そくそく)", kanji: "催促" },
+  { reading: "ジン (じんぞう)", kanji: "腎臓" },
+  { reading: "タン (だいたん)", kanji: "大胆" },
+  { reading: "わき (わきめ)", kanji: "脇目" },
+  { reading: "コン (こんちゅう)", kanji: "昆虫" },
+  { reading: "シン (しんし)", kanji: "紳士" },
+  { reading: "フン (ふんいき)", kanji: "雰囲気" },
+  { reading: "キン/えり (えり)", kanji: "襟" },
+  { reading: "エイ/よむ (えいか)", kanji: "詠歌" },
+  { reading: "チョウ (とくちょう)", kanji: "特徴" },
+  { reading: "キ/かめ (かめ)", kanji: "亀" },
+  { reading: "エキ/ヤク (けんえき)", kanji: "検疫" },
+  { reading: "ゲイ/むかえる (むかえる)", kanji: "迎える" },
+  { reading: "スイ/とげる (すいこう)", kanji: "遂行" },
+  { reading: "チョウ/こえる (こえる)", kanji: "超える" },
+  { reading: "ボ/したう (したう)", kanji: "慕う" },
+  { reading: "ホウ/あわ (はつほう)", kanji: "発泡" },
+  { reading: "ダク/にごる (だくおん)", kanji: "濁音" },
+  { reading: "シツ/うるし (しっこく)", kanji: "漆黒" },
+  { reading: "タイ (あんたい)", kanji: "安泰" },
+  { reading: "カン/きも (かんよう)", kanji: "肝要" },
+  { reading: "ジョウ/たたむ (さんじゅう)", kanji: "三重" },
+  { reading: "シン/ねる (ねる)", kanji: "寝る" },
+  { reading: "カク (しゅうかく)", kanji: "収穫" },
+  { reading: "とうげ (とうげ)", kanji: "峠" },
+  { reading: "におう (におう)", kanji: "匂う" },
+  { reading: "イ/えらい (えらい)", kanji: "偉い" },
+  { reading: "タン/ほころびる (ほつれ)", kanji: "綻び" },
+  { reading: "ショウ/こがれる (しょうてん)", kanji: "焦点" },
+  { reading: "ボン (ぼん)", kanji: "盆" },
+  { reading: "テン/そえる (そえる)", kanji: "添える" },
+  { reading: "イ (いげん)", kanji: "威厳" },
+  { reading: "サイ/とし (じゅうさんさい)", kanji: "十三歳" },
+  { reading: "ソ/うとい (そかい)", kanji: "疎開" },
+  { reading: "メツ/ほろびる (ぜんめつ)", kanji: "全滅" },
+  { reading: "はだ (はだぎ)", kanji: "肌着" },
+  { reading: "エン/なまり (えんぴつ)", kanji: "鉛筆" },
+  { reading: "ケイ/くき (くき)", kanji: "茎" },
+  { reading: "ヘキ/かべ (かべ)", kanji: "壁" },
+  { reading: "カン/ゆるやか (ゆるやか)", kanji: "緩やか" },
+  { reading: "ダン/はずむ (はずむ)", kanji: "弾む" },
+  { reading: "ユウ (よ余裕)", kanji: "余裕" },
+  { reading: "ルイ/なみだ (なみだ)", kanji: "涙" },
+  { reading: "ケン/かた (かた)", kanji: "肩" },
+  { reading: "ソウ/さがす (さがす)", kanji: "捜す" },
+  { reading: "ダ (むだ)", kanji: "無駄" },
+  { reading: "デン/との (との)", kanji: "殿" },
+  { reading: "アイ (あいさつ)", kanji: "挨拶" },
+  { reading: "チョウ/すむ (すむ)", kanji: "澄む" },
+  { reading: "ビン (こびん)", kanji: "小瓶" },
+  { reading: "セイ (いっせい)", kanji: "一斉" },
+  { reading: "イン/かげ (かげ)", kanji: "陰" },
+  { reading: "ショウ/のぼる (のぼる)", kanji: "昇る" },
+  { reading: "ヨウ/ゆれる (ゆれる)", kanji: "揺れる" },
+  { reading: "シュン/またたき (しゅんかん)", kanji: "瞬間" },
+  { reading: "オウ/おく (おく)", kanji: "奥" },
+  { reading: "カツ/なめらか (なめらか)", kanji: "滑らか" },
+  { reading: "シン/のばす (のばす)", kanji: "伸ばす" },
+  { reading: "ハク/ヒョウ (はくしゅ)", kanji: "拍手" },
+  { reading: "チョウ/とぶ (はねる)", kanji: "跳ねる" },
+  { reading: "だれ (だれ)", kanji: "誰" },
+  { reading: "ケン/かける (けんめい)", kanji: "懸命" },
+  { reading: "モウ/あみ (あみ)", kanji: "網" },
+  { reading: "ジャク/さびしい (さびしい)", kanji: "寂しい" },
+  { reading: "グウ/すみ (かたすみ)", kanji: "片隅" },
+  { reading: "スイ/ふく (ふく)", kanji: "吹く" },
+  { reading: "モク/だまる (だまる)", kanji: "黙る" },
+  { reading: "シ/めす (めしべ)", kanji: "雌しべ" },
+  { reading: "キク (きく)", kanji: "菊" },
+  { reading: "ころ (ひごろ)", kanji: "日頃" },
+  { reading: "ズイ (ついずい)", kanji: "追随" },
+  { reading: "ソウ/はく (いっそう)", kanji: "一掃" },
+  { reading: "ルイ (にるいだ)", kanji: "二塁打" },
+  { reading: "にじ (にじ)", kanji: "虹" },
+  { reading: "カ/かける (かかる)", kanji: "架かる" },
+  { reading: "コウ/あおぐ (あおぐ)", kanji: "仰ぐ" },
+  { reading: "ト (ほくと)", kanji: "北斗" }
+];
+
+function shuffle(array) {
+  let a = [...array];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+let quizData = shuffle(originalQuizData);
+let currentIndex = 0;
+let correctCount = 0;
+let history = [];
+let isDrawing = false;
+
+// Google認識API用データ
+let currentStrokes = [];
+let currentStrokeX = [];
+let currentStrokeY = [];
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playSound(type) {
+  try {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    if (type === 'correct') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+      osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.1); // E5
+      osc.frequency.setValueAtTime(783.99, audioCtx.currentTime + 0.2); // G5
+      gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+      osc.start(audioCtx.currentTime);
+      osc.stop(audioCtx.currentTime + 0.4);
+    } else if (type === 'incorrect') {
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(160, audioCtx.currentTime);
+      osc.frequency.setValueAtTime(130, audioCtx.currentTime + 0.15);
+      gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
+      osc.start(audioCtx.currentTime);
+      osc.stop(audioCtx.currentTime + 0.35);
+    }
+  } catch(e) {
+    // ブラウザで自動再生制限がある場合は無視
+  }
+}
+
+ctx.lineWidth = 6;
+ctx.lineCap = 'round';
+ctx.lineJoin = 'round';
+ctx.strokeStyle = '#1e293b';
+
+function saveState() {
+  history.push({
+    img: ctx.getImageData(0, 0, canvas.width, canvas.height),
+    strokes: JSON.parse(JSON.stringify(currentStrokes))
+  });
+}
+
+function startDrawing(e) {
+  e.preventDefault();
+  saveState();
+  isDrawing = true;
+  const rect = canvas.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  const x = Math.round(clientX - rect.left);
+  const y = Math.round(clientY - rect.top);
+  
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+
+  currentStrokeX = [x];
+  currentStrokeY = [y];
+}
+
+function draw(e) {
+  if (!isDrawing) return;
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  const x = Math.round(clientX - rect.left);
+  const y = Math.round(clientY - rect.top);
+  
+  ctx.lineTo(x, y);
+  ctx.stroke();
+
+  currentStrokeX.push(x);
+  currentStrokeY.push(y);
+}
+
+function stopDrawing(e) {
+  if (isDrawing) {
+    isDrawing = false;
+    currentStrokes.push([currentStrokeX, currentStrokeY]);
+  }
+}
+
+canvas.addEventListener('mousedown', startDrawing);
+canvas.addEventListener('mousemove', draw);
+canvas.addEventListener('mouseup', stopDrawing);
+canvas.addEventListener('mouseleave', stopDrawing);
+
+canvas.addEventListener('touchstart', startDrawing, { passive: false });
+canvas.addEventListener('touchmove', draw, { passive: false });
+canvas.addEventListener('touchend', stopDrawing);
+
+function undoCanvas() {
+  if (history.length > 0) {
+    const previous = history.pop();
+    ctx.putImageData(previous.img, 0, 0);
+    currentStrokes = previous.strokes;
+  }
+}
+
+function clearCanvas() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  history = [];
+  currentStrokes = [];
+  document.getElementById('result').textContent = '';
+  document.getElementById('answer').textContent = '';
+  document.getElementById('candidates').textContent = '';
+  document.getElementById('manualGradeBox').style.display = 'none';
+}
+
+function showToast(message) {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2500);
+}
+
+async function checkAnswer() {
+  if (currentStrokes.length === 0) {
+    showToast("文字を書いてから「判定」を押してね！");
+    return;
+  }
+
+  const checkBtn = document.getElementById('checkBtn');
+  checkBtn.disabled = true;
+  checkBtn.textContent = '判定中...';
+
+  const targetKanji = quizData[currentIndex].kanji;
+
+  try {
+    const response = await fetch('https://inputtools.google.com/request?itc=ja-t-i0-handwrit&app=autodraw', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        input_type: 0,
+        requests: [{
+          language: 'ja',
+          writing_guide: { width: 280, height: 280 },
+          ink: currentStrokes
+        }]
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    if (data && data[0] === 'SUCCESS' && data[1] && data[1][0] && data[1][0][1]) {
+      const candidates = data[1][0][1];
+      evaluateResult(targetKanji, candidates);
+    } else {
+      throw new Error("Invalid API response format");
+    }
+  } catch (error) {
+    console.warn('Google Recognition API error:', error);
+    // CORSエラーや通信障害の場合、自己採点モードを表示
+    document.getElementById('result').textContent = '⚠️ API接続不能';
+    document.getElementById('result').className = 'result incorrect';
+    document.getElementById('answer').textContent = `正解: ${targetKanji}`;
+    document.getElementById('candidates').textContent = 'ローカルファイル (file://) の制限によりAPI呼び出しが制限されました。';
+    document.getElementById('manualGradeBox').style.display = 'block';
+  } finally {
+    checkBtn.disabled = false;
+    checkBtn.textContent = '判定';
+  }
+}
+
+function evaluateResult(targetKanji, candidates) {
+  // 正解判定: 認識候補の上位5件の中に正解漢字が含まれているかチェック
+  const topCandidates = candidates.slice(0, 5);
+  
+  // 複合語（例: "封印"）の場合、文字が含まれているかチェック
+  let isCorrect = false;
+
+  for (let c of topCandidates) {
+    if (c === targetKanji || targetKanji.includes(c) || c.includes(targetKanji)) {
+      isCorrect = true;
+      break;
+    }
+  }
+
+  const resultEl = document.getElementById('result');
+  const answerEl = document.getElementById('answer');
+  const candidatesEl = document.getElementById('candidates');
+
+  candidatesEl.textContent = `認識結果候補: ${topCandidates.join(', ')}`;
+  answerEl.textContent = `正解: ${targetKanji}`;
+
+  if (isCorrect) {
+    resultEl.textContent = '◯ 正解！';
+    resultEl.className = 'result correct';
+    correctCount++;
+    playSound('correct');
+  } else {
+    resultEl.textContent = '✕ 不正解';
+    resultEl.className = 'result incorrect';
+    playSound('incorrect');
+    // 誤判定の可能性があるため、判定調整用ボタンを表示
+    document.getElementById('manualGradeBox').style.display = 'block';
+  }
+
+  showNextButton();
+  updateScoreUI();
+}
+
+function applyManualGrade(isCorrect) {
+  const resultEl = document.getElementById('result');
+  if (isCorrect) {
+    resultEl.textContent = '◯ 正解 (自己判定)';
+    resultEl.className = 'result correct';
+    correctCount++;
+    playSound('correct');
+  } else {
+    resultEl.textContent = '✕ 不正解 (自己判定)';
+    resultEl.className = 'result incorrect';
+    playSound('incorrect');
+  }
+  document.getElementById('manualGradeBox').style.display = 'none';
+  showNextButton();
+  updateScoreUI();
+}
+
+function showNextButton() {
+  document.getElementById('checkBtn').style.display = 'none';
+  document.getElementById('nextBtn').style.display = 'inline-block';
+}
+
+function updateScoreUI() {
+  document.getElementById('score').textContent = `正解: ${correctCount}`;
+}
+
+function loadQuestion() {
+  clearCanvas();
+  const total = quizData.length;
+  document.getElementById('progress').textContent = `問題 ${currentIndex + 1} / ${total}`;
+  document.getElementById('progressBar').style.width = `${((currentIndex + 1) / total) * 100}%`;
+  document.getElementById('reading').textContent = quizData[currentIndex].reading;
+  document.getElementById('checkBtn').style.display = 'inline-block';
+  document.getElementById('nextBtn').style.display = 'none';
+}
+
+function nextQuestion() {
+  if (currentIndex < quizData.length - 1) {
+    currentIndex++;
+    loadQuestion();
+  } else {
+    // 全問終了処理
+    document.getElementById('reading').textContent = "🎉 全問題完了！";
+    document.getElementById('result').textContent = `成績: ${correctCount} / ${quizData.length}`;
+    document.getElementById('result').className = 'result correct';
+    document.getElementById('answer').textContent = "お疲れ様でした！";
+    document.getElementById('candidates').textContent = "";
+    document.getElementById('checkBtn').style.display = 'none';
+    document.getElementById('nextBtn').style.display = 'none';
+  }
+}
+
+// 初期化
+loadQuestion();
+</script>
+</body>
+</html>
