@@ -397,6 +397,14 @@
           <option value="ankoku">暗黒騎士 (耐久)</option>
         </select>
       </div>
+      <div>
+        難易度:
+        <select id="difficultySelect" onchange="changeDifficulty()">
+          <option value="normal">普通</option>
+          <option value="hard" selected>ハード (推奨)</option>
+          <option value="oni">鬼畜</option>
+        </select>
+      </div>
     </div>
 
     <!-- お題指示表示 -->
@@ -457,7 +465,7 @@
 </div>
 
 <script>
-// --- キャラデータ ---
+// --- キャラデータ (敵のステータスを大幅強化) ---
 const PLAYER_CHARS = {
   bujin: { name: '武神', hp: 100, color: '#38bdf8', powerMult: 1.0 },
   hayate: { name: '疾風', hp: 85, color: '#2dd4bf', powerMult: 0.9 },
@@ -465,10 +473,25 @@ const PLAYER_CHARS = {
 };
 
 const ENEMY_CHARS = {
-  rasetsu: { name: '羅刹王', hp: 200, color: '#f43f5e', attackInterval: 240 },
-  houou: { name: '鳳凰帝', hp: 160, color: '#facc15', attackInterval: 180 },
-  ankoku: { name: '暗黒騎士', hp: 250, color: '#a855f7', attackInterval: 280 }
+  rasetsu: { name: '羅刹王', hp: 350, color: '#f43f5e', attackInterval: 100, baseDmg: 14 },
+  houou: { name: '鳳凰帝', hp: 280, color: '#facc15', attackInterval: 65, baseDmg: 12 },
+  ankoku: { name: '暗黒騎士', hp: 500, color: '#a855f7', attackInterval: 130, baseDmg: 20 }
 };
+
+// 各漢字の基準画数 (厳格判定用)
+const KANJI_STROKES = {
+  '絶': 12, '滅': 13, '擂': 16, '爆': 19,
+  '鐳': 21, '改': 7,  '雷': 13, '拳': 10, '蹴': 19
+};
+
+let difficultyMult = 1.2; // ハード基準
+
+function changeDifficulty() {
+  const diff = document.getElementById('difficultySelect').value;
+  if (diff === 'normal') difficultyMult = 0.8;
+  if (diff === 'hard') difficultyMult = 1.2;
+  if (diff === 'oni') difficultyMult = 2.0;
+}
 
 // --- 漢字技データ ---
 const SKILLS = {
@@ -759,12 +782,13 @@ function enemyAttack() {
   playerAnim.state = 'hit';
   playerAnim.frame = 0;
 
-  const dmg = Math.floor(8 + Math.random() * 8);
+  const eConf = ENEMY_CHARS[enemyKey];
+  const dmg = Math.floor((eConf.baseDmg + Math.random() * 8) * difficultyMult);
   playerHp = Math.max(0, playerHp - dmg);
   updateHpBars();
 
   addFloatingText(`-${dmg}`, playerAnim.x - 10, playerAnim.y - 40, '#f43f5e');
-  spawnParticles(playerAnim.x, playerAnim.y - 20, '#f43f5e', 8);
+  spawnParticles(playerAnim.x, playerAnim.y - 20, '#f43f5e', 10);
   playSfx('hit');
 
   if (playerHp <= 0) {
@@ -864,15 +888,16 @@ async function castSkill() {
     if (manualVal !== 'auto') {
       executeSkill(manualVal);
     } else {
-      document.getElementById('msgBanner').textContent = '⚠️ 枠内に漢字を書いてね！';
+      document.getElementById('msgBanner').textContent = '⚠️ 枠内に漢字をしっかり書いてね！';
     }
     return;
   }
 
-  document.getElementById('msgBanner').textContent = '🔍 判定中...';
+  document.getElementById('msgBanner').textContent = '🔍 厳格判定中...';
   let recognizedKanji = null;
+  let isStrictSuccess = false;
 
-  // Google Handwriting API呼び出し (エラー時はfallbackへ移行)
+  // Google Handwriting API呼び出し
   if (!isUsingFallbackMode) {
     try {
       const response = await fetch('https://inputtools.google.com/request?itc=ja-t-i0-handwrit&app=autodraw', {
@@ -892,38 +917,57 @@ async function castSkill() {
         const data = await response.json();
         if (data && data[0] === 'SUCCESS' && data[1] && data[1][0] && data[1][0][1]) {
           const candidates = data[1][0][1];
-          // 候補の中で目標漢字とマッチするものを検索
-          for (let c of candidates) {
-            if (c === currentTargetKey) {
-              recognizedKanji = c;
-              break;
-            }
-          }
-          if (!recognizedKanji && candidates.length > 0) {
-            recognizedKanji = candidates[0]; // 先頭候補
+          
+          // 判定強化：上位3位候補までに目的の漢字が含まれているか厳しく判定！
+          const topCandidates = candidates.slice(0, 3);
+          if (topCandidates.includes(currentTargetKey)) {
+            recognizedKanji = currentTargetKey;
+            isStrictSuccess = true;
+          } else if (candidates.length > 0) {
+            recognizedKanji = candidates[0]; // 全く違う漢字が書かれた場合
           }
         }
       }
     } catch (err) {
-      // ERR_BLOCKED_BY_CLIENT などのエラーをキャッチしてオフラインモードへスムーズに切替
       console.warn('Google Recognition API unavailable. Switching to fallback mode.');
       isUsingFallbackMode = true;
-      document.getElementById('statusTag').textContent = '🛡️ ローカル判定モード';
+      document.getElementById('statusTag').textContent = '🛡️ ローカル画数判定';
       document.getElementById('statusTag').style.color = '#38bdf8';
     }
   }
 
-  // ローカルフォールバック判定 (APIがブロックされている、またはオフライン時)
-  if (recognizedKanji === null) {
+  // ローカル/フォールバック判定 (画数と描画量のチェックを厳格化)
+  if (!isStrictSuccess && isUsingFallbackMode) {
     if (manualVal !== 'auto') {
       recognizedKanji = manualVal;
+      isStrictSuccess = true;
     } else {
-      // 画数が1画以上あれば目標の漢字としてみなすフレンドリー判定
-      recognizedKanji = currentTargetKey;
+      const targetStrokes = KANJI_STROKES[currentTargetKey] || 10;
+      const actualStrokes = currentStrokes.length;
+      
+      // ストローク数（画数）がお題の±3画以内かつ、十分な線描画がある場合のみ合格
+      let totalLength = 0;
+      currentStrokes.forEach(s => { totalLength += s[0].length; });
+
+      if (Math.abs(actualStrokes - targetStrokes) <= 3 && totalLength >= 15) {
+        recognizedKanji = currentTargetKey;
+        isStrictSuccess = true;
+      }
     }
   }
 
-  executeSkill(recognizedKanji);
+  // 判定結果の適用
+  if (isStrictSuccess && recognizedKanji === currentTargetKey) {
+    executeSkill(recognizedKanji);
+  } else {
+    // 判定失敗（MISS）
+    document.getElementById('msgBanner').textContent = `❌ MISS! 判定失敗 (認識: ${recognizedKanji || '不明'}) 正確に書こう！`;
+    addFloatingText('MISS!', enemyAnim.x - 10, enemyAnim.y - 40, '#9ca3af');
+    playSfx('hit');
+    comboIndex = -1; // コンボ中断
+    document.getElementById('comboBadge').style.display = 'none';
+  }
+
   clearDrawCanvas();
 }
 
